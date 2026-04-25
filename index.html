@@ -319,17 +319,34 @@
       }
 
       function resetMap() {
-        markers.forEach(m => m.setMap(null));
-        markers = [];
-        if (shadeLine) shadeLine.setMap(null);
-        if (standardLine) standardLine.setMap(null);
-        document.getElementById("searchBox").value = "";
-        document.getElementById("confirmPointBtn").style.display = "none";
-        document.getElementById("calculateBtn").style.display = "none";
-        document.getElementById("statsPanel").style.display = "none";
-        document.getElementById("loader").style.display = "none";
-        pendingLocation = null;
-      }
+    // 1. Clear markers from the Google Map
+    markers.forEach(m => m.setMap(null));
+    
+    // 2. IMPORTANT: Completely empty the array
+    markers = []; 
+    
+    // 3. Clear the routes (lines) from the map
+    if (shadeLine) {
+        shadeLine.setMap(null);
+        shadeLine = null; // Reset the variable
+    }
+    if (standardLine) {
+        standardLine.setMap(null);
+        standardLine = null; // Reset the variable
+    }
+    
+    // 4. Reset all UI elements
+    document.getElementById("searchBox").value = "";
+    document.getElementById("confirmPointBtn").style.display = "none";
+    document.getElementById("calculateBtn").style.display = "none";
+    document.getElementById("statsPanel").style.display = "none";
+    document.getElementById("loader").style.display = "none";
+    
+    // 5. Reset pending location data
+    pendingLocation = null;
+    
+    console.log("Map fully reset. Ready for new points.");
+}
     </script>
 
     <script async defer
