@@ -8,9 +8,11 @@ import pickle
 import os
 import zipfile
 
+# 1. יצירת התיקייה אם היא לא קיימת
 if not os.path.exists('graphs'):
     os.makedirs('graphs')
 
+# 2. חילוץ אוטומטי של קבצי ה-ZIP הקטנים
 zip_files = ['graph_8.zip', 'graph_10.zip', 'graph_14.zip', 'graph_16.zip']
 for zip_name in zip_files:
     if os.path.exists(zip_name):
@@ -70,7 +72,6 @@ def get_or_build_graph(date_str, hour_val):
         graphs_cache[cache_key] = G
         return G
     else:
-        # עכשיו, אם הקובץ חסר, במקום לקרוס בניסיון חיבור ל-SQL, פשוט נחזיר גרף ריק
         print(f"Error: Graph file for {hour_val}:00 not found!")
         return nx.Graph()
 
@@ -81,39 +82,35 @@ def calculate_route(request: RouteRequest):
     if not G.nodes:
         return {"shade_route": [], "standard_route": [], "stats": {"shade": {"dist": 0, "shadow": 0}, "standard": {"dist": 0, "shadow": 0}}}
 
+    # מציאת הצמתים הקרובים ביותר להתחלה ולסיום
     start_node = min(G.nodes, key=lambda n: (n[1] - request.start_lat)**2 + (n[0] - request.start_lng)**2)
     end_node = min(G.nodes, key=lambda n: (n[1] - request.end_lat)**2 + (n[0] - request.end_lng)**2)
 
+    # 1. חישוב המסלול הרגיל (לפי מרחק בלבד)
     standard_nodes = nx.shortest_path(G, source=start_node, target=end_node, weight='length')
     dist_standard = sum(G.get_edge_data(standard_nodes[i], standard_nodes[i+1]).get('length', 0) for i in range(len(standard_nodes)-1))
 
-    MAX_ALLOWED_DISTANCE = dist_standard + 500
-    shadiest_nodes = standard_nodes 
-    
+    # 2. חישוב המסלול המוצל המהיר (לפי משקל הצל שהגדרנו מראש)
     try:
-        path_generator = nx.shortest_simple_paths(G, source=start_node, target=end_node, weight='weight')
-        attempts = 0
-        for path in path_generator:
-            attempts += 1
-            path_dist = sum(G.get_edge_data(path[i], path[i+1]).get('length', 0) for i in range(len(path)-1))
-            
-            if path_dist <= MAX_ALLOWED_DISTANCE:
-                shadiest_nodes = path
-                break 
-                
-            if attempts >= 50:
-                break
+        shadiest_nodes = nx.shortest_path(G, source=start_node, target=end_node, weight='weight')
+        dist_shade = sum(G.get_edge_data(shadiest_nodes[i], shadiest_nodes[i+1]).get('length', 0) for i in range(len(shadiest_nodes)-1))
+        
+        # אם המסלול המוצל ארוך מדי (מעל 500 מטר תוספת), נשתמש ברגיל
+        if dist_shade > dist_standard + 500:
+            shadiest_nodes = standard_nodes
+            dist_shade = dist_standard
     except nx.NetworkXNoPath:
-        pass
+        shadiest_nodes = standard_nodes
+        dist_shade = dist_standard
 
+    # בניית הקווים הגיאומטריים למפה
     line_shade = get_smooth_path(G, shadiest_nodes)
     line_standard = get_smooth_path(G, standard_nodes)
 
     shade_coords = [{"lat": y, "lng": x} for x, y in line_shade.coords] if line_shade else []
     standard_coords = [{"lat": y, "lng": x} for x, y in line_standard.coords] if line_standard else []
 
-    dist_shade = sum(G.get_edge_data(shadiest_nodes[i], shadiest_nodes[i+1]).get('length', 0) for i in range(len(shadiest_nodes)-1))
-    
+    # חישוב אחוזי הצל להצגה בסטטיסטיקות
     if len(shadiest_nodes) > 1:
         shadow_shade = sum(G.get_edge_data(shadiest_nodes[i], shadiest_nodes[i+1]).get('shadow_ratio', 0) for i in range(len(shadiest_nodes)-1)) / (len(shadiest_nodes)-1)
     else:
@@ -129,16 +126,4 @@ def calculate_route(request: RouteRequest):
         "standard_route": standard_coords,
         "stats": {
             "shade": {"dist": round(dist_shade), "shadow": round(shadow_shade * 100)},
-            "standard": {"dist": round(dist_standard), "shadow": round(shadow_standard * 100)}
-        }
-    }
-
-if __name__ == "__main__":
-    import uvicorn
-    print("Pre-loading all graphs into memory. Please wait...")
-    hours_to_preload = [8, 10, 14, 16] 
-    for h in hours_to_preload:
-        get_or_build_graph('2025-06-21', h)
-        
-    print("All graphs loaded! Server is ready.")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+            "standard": {"dist": round(dist_standard
