@@ -40,7 +40,6 @@
         display: none;
       }
 
-      /* Style for the main calculation button */
       #calculateBtn {
         background-color: #1E8449; color: white;
         display: none;
@@ -94,6 +93,13 @@
           color: #666;
           margin-top: 10px;
       }
+
+      /* Container for time selection and calculation action */
+      #actionArea {
+          margin-top: 15px;
+          border-top: 1px solid #eee;
+          padding-top: 10px;
+      }
     </style>
   </head>
   <body>
@@ -107,18 +113,20 @@
 
       <p style="font-size: 13px; color: #666; margin-bottom: 5px;">Click map or search for Points A & B</p>
 
-      <div id="manualTime" style="font-size: 12px; margin-bottom: 10px;">
-          <label>Change Hour:</label>
-          <select id="hourSelect" onchange="handleHourChange()">
-            <option value="8">08:00</option>
-            <option value="10">10:00</option>
-            <option value="14">14:00</option>
-            <option value="16">16:00</option>
-          </select>
-      </div>
+      <div id="actionArea">
+          <div id="manualTime" style="font-size: 13px; margin-bottom: 10px;">
+              <label><b>Route Time:</b></label>
+              <select id="hourSelect" onchange="handleHourChange()">
+                <option value="8">08:00</option>
+                <option value="10">10:00</option>
+                <option value="14">14:00</option>
+                <option value="16">16:00</option>
+              </select>
+          </div>
 
-      <button id="calculateBtn" class="btn" onclick="triggerRouteCalculation()">Calculate Route 🌿</button>
-      <div id="loader" class="loader">Calculating... please wait</div>
+          <button id="calculateBtn" class="btn" onclick="triggerRouteCalculation()">Calculate Route 🌿</button>
+          <div id="loader" class="loader">Calculating optimal shade...</div>
+      </div>
       
       <button class="btn reset-btn" onclick="resetMap()">Reset Map</button>
 
@@ -143,7 +151,6 @@
           zoomControl: true
         });
 
-        // Initialize Google Places Autocomplete
         const input = document.getElementById("searchBox");
         searchBox = new google.maps.places.Autocomplete(input);
         searchBox.bindTo("bounds", map);
@@ -155,11 +162,9 @@
           pendingLocation = place.geometry.location;
           map.setCenter(pendingLocation);
           map.setZoom(17);
-
           document.getElementById("confirmPointBtn").style.display = "block";
         });
 
-        // Click listener for manual point selection on map
         map.addListener("click", (e) => {
           addMarker(e.latLng);
         });
@@ -167,13 +172,8 @@
         syncTime();
       }
 
-      /**
-       * CLEARS EXISTING DATA WHEN STARTING A NEW SEARCH
-       * Ensures the user doesn't calculate routes based on old/irrelevant points.
-       */
       function handleSearchFocus() {
           if (markers.length >= 2 || shadeLine) {
-              console.log("New search session started. Resetting map...");
               resetMap();
           }
       }
@@ -197,12 +197,15 @@
         });
         markers.push(marker);
 
-        // Show the calculation button only when both points are set
         if (markers.length === 2) {
             document.getElementById("calculateBtn").style.display = "block";
         }
       }
 
+      /**
+       * SYNC TIME
+       * Detects current time and selects the closest available pre-calculated hour.
+       */
       function syncTime() {
         const now = new Date();
         const currentHour = now.getHours();
@@ -211,13 +214,9 @@
             Math.abs(curr - currentHour) < Math.abs(prev - currentHour) ? curr : prev
         );
         document.getElementById("hourSelect").value = bestMatch;
-        document.getElementById("timeStatus").innerText = `Time: ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`;
+        document.getElementById("timeStatus").innerText = `Current Time: ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`;
       }
 
-      /**
-       * TRIGGER CALCULATION
-       * Shows loader and disables button to prevent double-clicks while server works.
-       */
       function triggerRouteCalculation() {
           if (markers.length < 2) return;
           document.getElementById("loader").style.display = "block";
@@ -225,9 +224,8 @@
           fetchRoute(markers[0].getPosition(), markers[1].getPosition());
       }
 
-      // Automatically recalculates if the user changes the time while a route is displayed
       function handleHourChange() {
-          if (markers.length === 2 && shadeLine) {
+          if (markers.length === 2 && (shadeLine || standardLine)) {
               triggerRouteCalculation();
           }
       }
@@ -254,8 +252,6 @@
           document.getElementById("calculateBtn").disabled = false;
           if (data.shade_route && data.shade_route.length > 0) {
               drawRoutes(data);
-          } else {
-              alert("No route found between these points.");
           }
         })
         .catch(err => {
@@ -269,7 +265,6 @@
         if (shadeLine) shadeLine.setMap(null);
         if (standardLine) standardLine.setMap(null);
 
-        // Render Standard Path (Grey)
         standardLine = new google.maps.Polyline({
             path: data.standard_route,
             strokeColor: "#7F8C8D",
@@ -278,7 +273,6 @@
             map: map
         });
 
-        // Render Shady Path (Green)
         shadeLine = new google.maps.Polyline({
             path: data.shade_route,
             strokeColor: "#1E8449",
@@ -287,13 +281,9 @@
             map: map
         });
 
-        /**
-         * AUTO-ZOOM (Fit Bounds)
-         * Adjusts the map view so the entire route is visible to the user.
-         */
         const bounds = new google.maps.LatLngBounds();
-        data.shade_route.forEach(point => bounds.extend(new google.maps.LatLng(point.lat, point.lng)));
-        map.fitBounds(bounds, 50); // Added 50px padding
+        data.shade_route.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
+        map.fitBounds(bounds, 50);
 
         updateStatsPanel(data.stats);
       }
@@ -318,35 +308,27 @@
         `;
       }
 
+      /**
+       * RESET MAP
+       * Fully resets markers, lines, UI, and reverts time to current real-world hour.
+       */
       function resetMap() {
-    // 1. Clear markers from the Google Map
-    markers.forEach(m => m.setMap(null));
-    
-    // 2. IMPORTANT: Completely empty the array
-    markers = []; 
-    
-    // 3. Clear the routes (lines) from the map
-    if (shadeLine) {
-        shadeLine.setMap(null);
-        shadeLine = null; // Reset the variable
-    }
-    if (standardLine) {
-        standardLine.setMap(null);
-        standardLine = null; // Reset the variable
-    }
-    
-    // 4. Reset all UI elements
-    document.getElementById("searchBox").value = "";
-    document.getElementById("confirmPointBtn").style.display = "none";
-    document.getElementById("calculateBtn").style.display = "none";
-    document.getElementById("statsPanel").style.display = "none";
-    document.getElementById("loader").style.display = "none";
-    
-    // 5. Reset pending location data
-    pendingLocation = null;
-    
-    console.log("Map fully reset. Ready for new points.");
-}
+        markers.forEach(m => m.setMap(null));
+        markers = [];
+        if (shadeLine) { shadeLine.setMap(null); shadeLine = null; }
+        if (standardLine) { standardLine.setMap(null); standardLine = null; }
+        
+        document.getElementById("searchBox").value = "";
+        document.getElementById("confirmPointBtn").style.display = "none";
+        document.getElementById("calculateBtn").style.display = "none";
+        document.getElementById("statsPanel").style.display = "none";
+        document.getElementById("loader").style.display = "none";
+        
+        // Re-sync time to current hour upon reset
+        syncTime();
+        
+        pendingLocation = null;
+      }
     </script>
 
     <script async defer
