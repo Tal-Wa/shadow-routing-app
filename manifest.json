@@ -1,0 +1,16 @@
+{
+  "short_name": "ShadowApp",
+  "name": "ShadowApp - Smart Routing",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3222/3222672.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#1E8449"
+}
