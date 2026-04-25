@@ -8,11 +8,9 @@ import pickle
 import os
 import zipfile
 
-# 1. יצירת התיקייה אם היא לא קיימת
 if not os.path.exists('graphs'):
     os.makedirs('graphs')
 
-# 2. חילוץ אוטומטי של קבצי ה-ZIP הקטנים כשמעלים לענן
 zip_files = ['graph_8.zip', 'graph_10.zip', 'graph_14.zip', 'graph_16.zip']
 for zip_name in zip_files:
     if os.path.exists(zip_name):
