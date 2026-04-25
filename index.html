@@ -16,7 +16,6 @@
         width: 300px;
       }
 
-      /* עדכנו את שורת החיפוש שתכיל גם את הכפתור */
       .controls {
         margin-bottom: 15px;
         display: flex;
@@ -29,7 +28,6 @@
         box-sizing: border-box; font-size: 14px;
       }
 
-      /* עיצוב כפתור ההוספה החדש */
       #confirmPointBtn {
         display: none;
         padding: 10px 15px;
@@ -53,7 +51,6 @@
         font-weight: bold; margin-top: 10px;
       }
 
-      /* עיצוב פאנל הסטטיסטיקה */
       #statsPanel {
         display: none;
         margin-top: 15px;
@@ -116,7 +113,7 @@
       let shadeLine = null;
       let standardLine = null;
       let searchBox;
-      let pendingLocation = null; // שומר את המיקום זמנית עד שלוחצים "Add"
+      let pendingLocation = null; 
 
       function initMap() {
         map = new google.maps.Map(document.getElementById("map"), {
@@ -139,7 +136,6 @@
           map.setCenter(pendingLocation);
           map.setZoom(17);
 
-          // מציגים את כפתור ה-Add
           document.getElementById("confirmPointBtn").style.display = "block";
         });
 
@@ -150,12 +146,10 @@
         syncTime();
       }
 
-      // פונקציה חדשה שמופעלת בלחיצה על Add
       function confirmLocation() {
           if (pendingLocation) {
               addMarker(pendingLocation);
 
-              // ניקוי החיפוש והסתרת הכפתור
               document.getElementById("searchBox").value = "";
               document.getElementById("confirmPointBtn").style.display = "none";
               pendingLocation = null;
@@ -181,7 +175,6 @@
         const now = new Date();
         const currentHour = now.getHours();
 
-        // מושך גם את הדקות כדי להציג שעה מדויקת ויפה
         const currentMin = now.getMinutes().toString().padStart(2, '0');
 
         const available = [8, 10, 14, 16];
@@ -191,7 +184,6 @@
 
         document.getElementById("hourSelect").value = bestMatch;
 
-        // עכשיו זה מציג רק את השעה הנוכחית הפשוטה!
         document.getElementById("timeStatus").innerText = `Time: ${currentHour}:${currentMin}`;
       }
 
