@@ -3,9 +3,14 @@
   "name": "ShadowApp - Smart Routing",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/3222/3222672.png",
-      "type": "image/png",
+      "src": "/app-icon.svg",
+      "type": "image/svg+xml",
       "sizes": "512x512"
+    },
+    {
+      "src": "/app-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192"
     }
   ],
   "start_url": "/",
