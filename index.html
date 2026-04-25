@@ -218,12 +218,24 @@
         document.getElementById("timeStatus").innerText = `Current Time: ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`;
       }
 
-      function triggerRouteCalculation() {
-          if (markers.length < 2) return;
-          document.getElementById("loader").style.display = "block";
-          document.getElementById("calculateBtn").disabled = true;
-          fetchRoute(markers[0].getPosition(), markers[1].getPosition());
-      }
+     function triggerRouteCalculation() {
+    if (markers.length < 2) return;
+
+    // Get the current local hour from the user's device
+    const currentHour = new Date().getHours();
+
+    // Prevent calculation if it's after 17:00 or before 06:00 (no sun)
+    if (currentHour >= 17 || currentHour < 6) {
+        alert("אין צורך לחשב את המסלול המוצל ביותר כי כבר אין שמש 🌙 צאו ליהנות מהאוויר!");
+        // Stop execution here to save server resources
+        return; 
+    }
+
+    // Proceed with route calculation
+    document.getElementById("loader").style.display = "block";
+    document.getElementById("calculateBtn").disabled = true;
+    fetchRoute(markers[0].getPosition(), markers[1].getPosition());
+}
 
       function handleHourChange() {
           if (markers.length === 2 && (shadeLine || standardLine)) {
