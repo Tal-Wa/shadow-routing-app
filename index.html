@@ -1,715 +1,362 @@
-<!-- <!DOCTYPE html>
-<html lang="he">
-  <head>
-    <meta charset="UTF-8">
-    <title>ShadowApp - Smart Routing</title>
-    <style>
-      #map { height: 100vh; width: 100%; }
-      body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-
-      #info {
-        position: absolute;
-        top: 10px; left: 10px;
-        background: white; padding: 20px;
-        z-index: 5;
-        border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        width: 300px;
-      }
-
-      .controls {
-        margin-bottom: 15px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      input {
-        padding: 10px;
-        border: 1px solid #ccc; border-radius: 4px;
-        font-size: 14px;
-      }
-
-      .btn {
-        padding: 10px;
-        border: none; border-radius: 4px; cursor: pointer;
-        font-weight: bold; width: 100%;
-      }
-
-      #confirmPointBtn {
-        background-color: #2196F3; color: white;
-        display: none;
-      }
-
-      #calculateBtn {
-        background-color: #1E8449; color: white;
-        display: none;
-        margin-top: 10px;
-      }
-
-      .status-pill {
-        display: inline-block;
-        padding: 4px 10px;
-        background: #e8f5e9; color: #2e7d32;
-        border-radius: 20px; font-size: 12px;
-        font-weight: bold; margin-bottom: 10px;
-      }
-
-      .reset-btn {
-        background-color: #f44336; color: white;
-        margin-top: 10px;
-      }
-
-      #statsPanel {
-        display: none;
-        margin-top: 15px;
-        padding: 15px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        border-left: 4px solid #1E8449;
-      }
-
-      .stat-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
-          font-size: 14px;
-      }
-
-      .stat-saving {
-          background: #e8f5e9;
-          padding: 8px;
-          border-radius: 5px;
-          text-align: center;
-          font-weight: bold;
-          color: #2e7d32;
-          margin-top: 10px;
-          font-size: 13px;
-      }
-      
-      .loader {
-          display: none;
-          text-align: center;
-          font-size: 12px;
-          color: #666;
-          margin-top: 10px;
-      }
-
-      /* Container for time selection and calculation action */
-      #actionArea {
-          margin-top: 15px;
-          border-top: 1px solid #eee;
-          padding-top: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="info">
-      <div class="status-pill" id="timeStatus">Detecting time...</div>
-
-      <div class="controls">
-        <input id="searchBox" type="text" placeholder="Search for a location..." onfocus="handleSearchFocus()">
-        <button id="confirmPointBtn" class="btn" onclick="confirmLocation()">Add to Map</button>
-      </div>
-
-      <p style="font-size: 13px; color: #666; margin-bottom: 5px;">Click map or search for Points A & B</p>
-
-      <div id="actionArea">
-          <button id="calculateBtn" class="btn" onclick="triggerRouteCalculation()">Calculate Route 🌿</button>
-          
-          <div id="loader" class="loader">Calculating optimal shade...</div>
-
-          <div id="manualTime" style="font-size: 13px; margin-top: 15px; margin-bottom: 10px;">
-              <label><b>Route Time:</b></label>
-             <select id="hourSelect" onchange="handleHourChange()">
-  <option value="8">08:00</option>
-  <option value="8.5">08:30</option>
-  <option value="9">09:00</option>
-  <option value="9.5">09:30</option>
-  <option value="10">10:00</option>
-  <option value="10.5">10:30</option>
-  <option value="11">11:00</option>
-  <option value="11.5">11:30</option>
-  <option value="12">12:00</option>
-  <option value="12.5">12:30</option>
-  <option value="13">13:00</option>
-  <option value="13.5">13:30</option>
-  <option value="14">14:00</option>
-  <option value="14.5">14:30</option>
-  <option value="15">15:00</option>
-  <option value="15.5">15:30</option>
-  <option value="16">16:00</option>
-  <option value="16.5">16:30</option>
-  <option value="17">17:00</option>
-</select>
-          </div>
-      </div>
-      
-      <button class="btn reset-btn" onclick="resetMap()">Reset Map</button>
-
-      <div id="statsPanel"></div>
-    </div>
-
-    <div id="map"></div>
-
-    <script>
-      let map;
-      let markers = [];
-      let shadeLine = null;
-      let standardLine = null;
-      let searchBox;
-      let pendingLocation = null; 
-
-      function initMap() {
-        map = new google.maps.Map(document.getElementById("map"), {
-          zoom: 15,
-          center: { lat: 31.8928, lng: 34.8113 },
-          disableDefaultUI: false,
-          zoomControl: true
-        });
-
-        const input = document.getElementById("searchBox");
-        searchBox = new google.maps.places.Autocomplete(input);
-        searchBox.bindTo("bounds", map);
-
-        searchBox.addListener("place_changed", () => {
-          const place = searchBox.getPlace();
-          if (!place.geometry || !place.geometry.location) return;
-
-          pendingLocation = place.geometry.location;
-          map.setCenter(pendingLocation);
-          map.setZoom(17);
-          document.getElementById("confirmPointBtn").style.display = "block";
-        });
-
-        map.addListener("click", (e) => {
-          addMarker(e.latLng);
-        });
-
-        syncTime();
-      }
-
-      function handleSearchFocus() {
-          if (markers.length >= 2 || shadeLine) {
-              resetMap();
-          }
-      }
-
-      function confirmLocation() {
-          if (pendingLocation) {
-              addMarker(pendingLocation);
-              document.getElementById("searchBox").value = "";
-              document.getElementById("confirmPointBtn").style.display = "none";
-              pendingLocation = null;
-          }
-      }
-
-      function addMarker(location) {
-        if (markers.length >= 2) return;
-
-        const marker = new google.maps.Marker({
-          position: location,
-          map: map,
-          label: markers.length === 0 ? "A" : "B"
-        });
-        markers.push(marker);
-
-        if (markers.length === 2) {
-            document.getElementById("calculateBtn").style.display = "block";
-        }
-      }
-
-      /**
-       * SYNC TIME
-       * Detects current time and selects the closest available pre-calculated hour.
-       */
-      function syncTime() {
-        const now = new Date();
-        const currentHour = now.getHours();
-        const available = [8, 10, 14, 16];
-        let bestMatch = available.reduce((prev, curr) =>
-            Math.abs(curr - currentHour) < Math.abs(prev - currentHour) ? curr : prev
-        );
-        document.getElementById("hourSelect").value = bestMatch;
-        document.getElementById("timeStatus").innerText = `Current Time: ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`;
-      }
-
-     function triggerRouteCalculation() {
-    if (markers.length < 2) return;
-
-    // Get the current local hour from the user's device
-    const currentHour = new Date().getHours();
-
-    // Prevent calculation if it's after 17:00 or before 06:00 (no sun)
-    if (currentHour >= 17 || currentHour < 6) {
-        alert("השמש שקעה 🌙 צאו ליהנות מהאוויר");
-        // Stop execution here to save server resources
-        return; 
-    }
-
-    // Proceed with route calculation
-    document.getElementById("loader").style.display = "block";
-    document.getElementById("calculateBtn").disabled = true;
-    fetchRoute(markers[0].getPosition(), markers[1].getPosition());
-}
-
-      function handleHourChange() {
-          if (markers.length === 2 && (shadeLine || standardLine)) {
-              triggerRouteCalculation();
-          }
-      }
-
-    function fetchRoute(startPos, endPos) {
-    // 1. Get the time selected by the user from the dropdown (as a decimal number, e.g., 11.5)
-    const selectedValue = parseFloat(document.getElementById("hourSelect").value);
-
-    // 2. Define the exact hours we have pre-calculated in the backend graphs
-    const availableHours = [8, 10, 14, 16];
-
-    // 3. Mathematical "Snapping": Find the closest available backend hour to the user's selection.
-    // The reduce function compares the absolute differences and keeps the closest match.
-    const closestHour = availableHours.reduce((prev, curr) =>
-        Math.abs(curr - selectedValue) < Math.abs(prev - selectedValue) ? curr : prev
-    );
-
-    // 4. Prepare the data payload to send to the server
-    const requestBody = {
-      start_lat: startPos.lat(),
-      start_lng: startPos.lng(),
-      end_lat: endPos.lat(),
-      end_lng: endPos.lng(),
-      date_str: '2025-06-21', // Fixed date for the pre-calculated shadow data
-      hour_val: closestHour   // Send the "snapped" hour, not the exact dropdown value!
-    };
-
-    // 5. Send the POST request to the FastAPI backend
-    fetch("/calculate_route", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
-    })
-    .then(res => res.json())
-    .then(data => {
-      // Hide the loading spinner and re-enable the calculate button
-      document.getElementById("loader").style.display = "none";
-      document.getElementById("calculateBtn").disabled = false;
-      
-      // If valid route data is returned, draw the lines on the map
-      if (data.shade_route && data.shade_route.length > 0) {
-          drawRoutes(data);
-      } else {
-          alert("No route found between these points.");
-      }
-    })
-    .catch(err => {
-        // Handle network or server errors gracefully
-        console.error("Fetch Error:", err);
-        document.getElementById("loader").style.display = "none";
-        document.getElementById("calculateBtn").disabled = false;
-    });
-}
-
-      function drawRoutes(data) {
-        if (shadeLine) shadeLine.setMap(null);
-        if (standardLine) standardLine.setMap(null);
-
-        standardLine = new google.maps.Polyline({
-            path: data.standard_route,
-            strokeColor: "#7F8C8D",
-            strokeOpacity: 0.6,
-            strokeWeight: 4,
-            map: map
-        });
-
-        shadeLine = new google.maps.Polyline({
-            path: data.shade_route,
-            strokeColor: "#1E8449",
-            strokeOpacity: 1.0,
-            strokeWeight: 7,
-            map: map
-        });
-
-        const bounds = new google.maps.LatLngBounds();
-        data.shade_route.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
-        map.fitBounds(bounds, 50);
-
-        updateStatsPanel(data.stats);
-      }
-
-      function updateStatsPanel(stats) {
-        const panel = document.getElementById("statsPanel");
-        panel.style.display = "block";
-        const saving = stats.shade.shadow - stats.standard.shadow;
-        panel.innerHTML = `
-            <h4 style="margin: 0 0 10px 0; color: #1E8449;">Route Comparison</h4>
-            <div class="stat-row">
-                <span><b>🌿 Shady Route:</b></span>
-                <span>${stats.shade.dist}m | ${stats.shade.shadow}% shade</span>
-            </div>
-            <div class="stat-row" style="color: #666;">
-                <span><b>🚶 Standard Route:</b></span>
-                <span>${stats.standard.dist}m | ${stats.standard.shadow}% shade</span>
-            </div>
-            <div class="stat-saving">
-                ☀️ You gain ${saving > 0 ? saving : 0}% more shade!
-            </div>
-        `;
-      }
-
-      /**
-       * RESET MAP
-       * Fully resets markers, lines, UI, and reverts time to current real-world hour.
-       */
-      function resetMap() {
-        markers.forEach(m => m.setMap(null));
-        markers = [];
-        if (shadeLine) { shadeLine.setMap(null); shadeLine = null; }
-        if (standardLine) { standardLine.setMap(null); standardLine = null; }
-        
-        document.getElementById("searchBox").value = "";
-        document.getElementById("confirmPointBtn").style.display = "none";
-        document.getElementById("calculateBtn").style.display = "none";
-        document.getElementById("statsPanel").style.display = "none";
-        document.getElementById("loader").style.display = "none";
-        
-        // Re-sync time to current hour upon reset
-        syncTime();
-        
-        pendingLocation = null;
-      }
-    </script>
-
-    <script async defer
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANpG9M1g17bl7-YRCxR6g1iEt5_kVDYFE&libraries=places&callback=initMap">
-    </script>
-  </body>
-</html> -->
-
-
-
 <!DOCTYPE html>
 <html lang="he">
-  <head>
-    <meta charset="UTF-8">
-    <title>ShadowApp - Smart Routing</title>
-    <style>
-      #map { height: 100vh; width: 100%; }
-      body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
-      #info {
-        position: absolute;
-        top: 10px; left: 10px;
-        background: white; padding: 20px;
-        z-index: 5;
-        border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        width: 300px;
-      }
+<head>
+  <meta charset="UTF-8">
+  <title>ShadowApp - Smart Routing</title>
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
 
-      .controls {
-        margin-bottom: 15px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 
-      input {
-        padding: 10px;
-        border: 1px solid #ccc; border-radius: 4px;
-        font-size: 14px;
-      }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 20px;
+      z-index: 5;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      width: 300px;
+    }
 
-      .btn {
-        padding: 10px;
-        border: none; border-radius: 4px; cursor: pointer;
-        font-weight: bold; width: 100%;
-      }
+    .controls {
+      margin-bottom: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
 
-      #confirmPointBtn {
-        background-color: #2196F3; color: white;
-        display: none;
-      }
+    input {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
 
-      #calculateBtn {
-        background-color: #1E8449; color: white;
-        display: none;
-        margin-top: 10px;
-      }
+    .btn {
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+    }
 
-      .status-pill {
-        display: inline-block;
-        padding: 4px 10px;
-        background: #e8f5e9; color: #2e7d32;
-        border-radius: 20px; font-size: 12px;
-        font-weight: bold; margin-bottom: 10px;
-      }
+    #confirmPointBtn {
+      background-color: #2196F3;
+      color: white;
+      display: none;
+    }
 
-      .reset-btn {
-        background-color: #f44336; color: white;
-        margin-top: 10px;
-      }
+    #calculateBtn {
+      background-color: #1E8449;
+      color: white;
+      display: none;
+      margin-top: 10px;
+    }
 
-      #statsPanel {
-        display: none;
-        margin-top: 15px;
-        padding: 15px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        border-left: 4px solid #1E8449;
-      }
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
 
-      .stat-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
-          font-size: 14px;
-      }
+    .reset-btn {
+      background-color: #f44336;
+      color: white;
+      margin-top: 10px;
+    }
 
-      .stat-saving {
-          background: #e8f5e9;
-          padding: 8px;
-          border-radius: 5px;
-          text-align: center;
-          font-weight: bold;
-          color: #2e7d32;
-          margin-top: 10px;
-          font-size: 13px;
-      }
-      
-      .loader {
-          display: none;
-          text-align: center;
-          font-size: 12px;
-          color: #666;
-          margin-top: 10px;
-      }
+    #statsPanel {
+      display: none;
+      margin-top: 15px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #1E8449;
+    }
 
-      /* Container for time selection and calculation action */
-      #actionArea {
-          margin-top: 15px;
-          border-top: 1px solid #eee;
-          padding-top: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="info">
-      <div class="status-pill" id="timeStatus">Detecting time...</div>
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
 
-      <div class="controls">
-        <input id="searchBox" type="text" placeholder="Search for a location..." onfocus="handleSearchFocus()">
-        <button id="confirmPointBtn" class="btn" onclick="confirmLocation()">Add to Map</button>
-      </div>
+    .stat-saving {
+      background: #e8f5e9;
+      padding: 8px;
+      border-radius: 5px;
+      text-align: center;
+      font-weight: bold;
+      color: #2e7d32;
+      margin-top: 10px;
+      font-size: 13px;
+    }
 
-      <p style="font-size: 13px; color: #666; margin-bottom: 5px;">Click map or search for Points A & B</p>
+    .loader {
+      display: none;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+    }
 
-      <div id="actionArea">
-          <button id="calculateBtn" class="btn" onclick="triggerRouteCalculation()">Calculate Route 🌿</button>
-          
-          <div id="loader" class="loader">Calculating optimal shade...</div>
+    #actionArea {
+      margin-top: 15px;
+      border-top: 1px solid #eee;
+      padding-top: 10px;
+    }
+  </style>
+</head>
 
-          <div id="manualTime" style="font-size: 13px; margin-top: 15px; margin-bottom: 10px;">
-              <label><b>Route Time:</b></label>
-              <select id="hourSelect" onchange="handleHourChange()">
-                <option value="8">08:00</option>
-                <option value="10">10:00</option>
-                <option value="14">14:00</option>
-                <option value="16">16:00</option>
-              </select>
-          </div>
-      </div>
-      
-      <button class="btn reset-btn" onclick="resetMap()">Reset Map</button>
+<body>
+  <div id="info">
+    <div class="status-pill" id="timeStatus">Detecting time...</div>
 
-      <div id="statsPanel"></div>
+    <div class="controls">
+      <input id="searchBox" type="text" placeholder="Search for a location..." onfocus="handleSearchFocus()">
+      <button id="confirmPointBtn" class="btn" onclick="confirmLocation()">Add to Map</button>
     </div>
 
-    <div id="map"></div>
+    <p style="font-size: 13px; color: #666; margin-bottom: 5px;">Click map or search for Points A & B</p>
 
-    <script>
-      let map;
-      let markers = [];
-      let shadeLine = null;
-      let standardLine = null;
-      let searchBox;
-      let pendingLocation = null; 
-      let isNightModeHandled = false;
+    <div id="actionArea">
+      <button id="calculateBtn" class="btn" onclick="triggerRouteCalculation()">Calculate Route 🌿</button>
 
-      function initMap() {
-        map = new google.maps.Map(document.getElementById("map"), {
-          zoom: 15,
-          center: { lat: 31.8928, lng: 34.8113 },
-          disableDefaultUI: false,
-          zoomControl: true
-        });
+      <div id="loader" class="loader">Calculating optimal shade...</div>
 
-        const input = document.getElementById("searchBox");
-        searchBox = new google.maps.places.Autocomplete(input);
-        searchBox.bindTo("bounds", map);
+      <div id="manualTime" style="font-size: 13px; margin-top: 15px; margin-bottom: 10px;">
+        <label><b>Route Time:</b></label>
+        <select id="hourSelect" onchange="handleHourChange()">
+          <option value="8">08:00</option>
+          <option value="8.5">08:30</option>
+          <option value="9">09:00</option>
+          <option value="9.5">09:30</option>
+          <option value="10">10:00</option>
+          <option value="10.5">10:30</option>
+          <option value="11">11:00</option>
+          <option value="11.5">11:30</option>
+          <option value="12">12:00</option>
+          <option value="12.5">12:30</option>
+          <option value="13">13:00</option>
+          <option value="13.5">13:30</option>
+          <option value="14">14:00</option>
+          <option value="14.5">14:30</option>
+          <option value="15">15:00</option>
+          <option value="15.5">15:30</option>
+          <option value="16">16:00</option>
+          <option value="16.5">16:30</option>
+          <option value="17">17:00</option>
+        </select>
+      </div>
+    </div>
 
-        searchBox.addListener("place_changed", () => {
-          const place = searchBox.getPlace();
-          if (!place.geometry || !place.geometry.location) return;
+    <button class="btn reset-btn" onclick="resetMap()">Reset Map</button>
 
-          pendingLocation = place.geometry.location;
-          map.setCenter(pendingLocation);
-          map.setZoom(17);
-          document.getElementById("confirmPointBtn").style.display = "block";
-        });
+    <div id="statsPanel"></div>
+  </div>
 
-        map.addListener("click", (e) => {
-          addMarker(e.latLng);
-        });
+  <div id="map"></div>
 
-        syncTime();
-      }
+  <script>
+    let map;
+    let markers = [];
+    let shadeLine = null;
+    let standardLine = null;
+    let searchBox;
+    let pendingLocation = null;
+    let isNightModeHandled = false;
 
-      function handleSearchFocus() {
-          if (markers.length >= 2 || shadeLine) {
-              resetMap();
-          }
-      }
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 15,
+        center: { lat: 31.8928, lng: 34.8113 },
+        disableDefaultUI: false,
+        zoomControl: true
+      });
 
-      function confirmLocation() {
-          if (pendingLocation) {
-              addMarker(pendingLocation);
-              document.getElementById("searchBox").value = "";
-              document.getElementById("confirmPointBtn").style.display = "none";
-              pendingLocation = null;
-          }
-      }
+      const input = document.getElementById("searchBox");
+      searchBox = new google.maps.places.Autocomplete(input);
+      searchBox.bindTo("bounds", map);
 
-      function addMarker(location) {
-        if (markers.length >= 2) return;
+      searchBox.addListener("place_changed", () => {
+        const place = searchBox.getPlace();
+        if (!place.geometry || !place.geometry.location) return;
 
-        const marker = new google.maps.Marker({
-          position: location,
-          map: map,
-          label: markers.length === 0 ? "A" : "B"
-        });
-        markers.push(marker);
+        pendingLocation = place.geometry.location;
+        map.setCenter(pendingLocation);
+        map.setZoom(17);
+        document.getElementById("confirmPointBtn").style.display = "block";
+      });
 
-        if (markers.length === 2) {
-            document.getElementById("calculateBtn").style.display = "block";
-        }
-      }
+      map.addListener("click", (e) => {
+        addMarker(e.latLng);
+      });
 
-      /**
-       * SYNC TIME
-       * Detects current time and selects the closest available pre-calculated hour.
-       */
-     function syncTime() {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMin = now.getMinutes();
-    
-    // Convert current time to a decimal number (e.g., 14:45 becomes 14.75)
-    let timeDecimal = currentHour + (currentMin / 60);
-
-    // Round to the nearest half-hour (e.g., 14.75 becomes 15.0)
-    let roundedTime = Math.round(timeDecimal * 2) / 2;
-
-    // Constrain the rounded time to stay within the dropdown's active hours (8 to 17)
-    if (roundedTime < 8) roundedTime = 8;
-    if (roundedTime > 17) roundedTime = 17;
-
-    document.getElementById("hourSelect").value = roundedTime.toString();
-    document.getElementById("timeStatus").innerText = `Current Time: ${currentHour}:${currentMin.toString().padStart(2, '0')}`;
-}
-
-     function triggerRouteCalculation() {
-    if (markers.length < 2) return;
-
-    // Get the current real-world hour
-    const currentHour = new Date().getHours();
-
-    // If it's night time AND we haven't warned the user yet
-    if ((currentHour >= 17 || currentHour < 6) && !isNightModeHandled) {
-       alert("השמש שקעה 🌙 צאו ליהנות מהאוויר");
-        document.getElementById("hourSelect").value = "8"; // Auto-switch to tomorrow morning
-        isNightModeHandled = true; // Mark that we've shown the warning
-        return; // Stop the calculation here to let the user decide
+      syncTime();
     }
 
-    document.getElementById("loader").style.display = "block";
-    document.getElementById("calculateBtn").disabled = true;
-    fetchRoute(markers[0].getPosition(), markers[1].getPosition());
-}
+    function handleSearchFocus() {
+      if (markers.length >= 2 || shadeLine) {
+        resetMap();
+      }
+    }
 
-    // Proceed with route calculation
-    document.getElementById("loader").style.display = "block";
-    document.getElementById("calculateBtn").disabled = true;
-    fetchRoute(markers[0].getPosition(), markers[1].getPosition());
-}
+    function confirmLocation() {
+      if (pendingLocation) {
+        addMarker(pendingLocation);
+        document.getElementById("searchBox").value = "";
+        document.getElementById("confirmPointBtn").style.display = "none";
+        pendingLocation = null;
+      }
+    }
 
-     function handleHourChange() {
-    isNightModeHandled = true; // The user manually picked an hour, no need for the night alert
-    if (markers.length === 2 && (shadeLine || standardLine)) {
+    function addMarker(location) {
+      if (markers.length >= 2) return;
+
+      const marker = new google.maps.Marker({
+        position: location,
+        map: map,
+        label: markers.length === 0 ? "A" : "B"
+      });
+      markers.push(marker);
+
+      if (markers.length === 2) {
+        document.getElementById("calculateBtn").style.display = "block";
+      }
+    }
+
+    function syncTime() {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMin = now.getMinutes();
+
+      // Convert current time to a decimal number (e.g., 14:45 becomes 14.75)
+      let timeDecimal = currentHour + (currentMin / 60);
+
+      // Round to the nearest half-hour (e.g., 14.75 becomes 15.0)
+      let roundedTime = Math.round(timeDecimal * 2) / 2;
+
+      // Constrain the rounded time to stay within the dropdown's active hours (8 to 17)
+      if (roundedTime < 8) roundedTime = 8;
+      if (roundedTime > 17) roundedTime = 17;
+
+      document.getElementById("hourSelect").value = roundedTime.toString();
+      document.getElementById("timeStatus").innerText = `Current Time: ${currentHour}:${currentMin.toString().padStart(2, '0')}`;
+    }
+
+    function triggerRouteCalculation() {
+      if (markers.length < 2) return;
+
+      const currentHour = new Date().getHours();
+
+      if ((currentHour >= 17 || currentHour < 6) && !isNightModeHandled) {
+        alert("השמש שקעה 🌙 צאו ליהנות מהאוויר");
+        document.getElementById("hourSelect").value = "8"; 
+        isNightModeHandled = true; 
+        return; 
+      }
+
+      document.getElementById("loader").style.display = "block";
+      document.getElementById("calculateBtn").disabled = true;
+      fetchRoute(markers[0].getPosition(), markers[1].getPosition());
+    }
+
+    function handleHourChange() {
+      isNightModeHandled = true; 
+      if (markers.length === 2 && (shadeLine || standardLine)) {
         triggerRouteCalculation();
+      }
     }
-}
 
-      function fetchRoute(startPos, endPos) {
-        const selectedHour = document.getElementById("hourSelect").value;
-        const requestBody = {
-          start_lat: startPos.lat(),
-          start_lng: startPos.lng(),
-          end_lat: endPos.lat(),
-          end_lng: endPos.lng(),
-          date_str: '2025-06-21',
-          hour_val: parseInt(selectedHour)
-        };
+    function fetchRoute(startPos, endPos) {
+      // 1. Get the time selected by the user from the dropdown
+      const selectedValue = parseFloat(document.getElementById("hourSelect").value);
 
-        fetch("/calculate_route", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody)
-        })
+      // 2. Define the exact hours we have pre-calculated
+      const availableHours = [8, 10, 14, 16];
+
+      // 3. Mathematical "Snapping"
+      const closestHour = availableHours.reduce((prev, curr) =>
+          Math.abs(curr - selectedValue) < Math.abs(prev - selectedValue) ? curr : prev
+      );
+
+      const requestBody = {
+        start_lat: startPos.lat(),
+        start_lng: startPos.lng(),
+        end_lat: endPos.lat(),
+        end_lng: endPos.lng(),
+        date_str: '2025-06-21',
+        hour_val: closestHour
+      };
+
+      fetch("/calculate_route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody)
+      })
         .then(res => res.json())
         .then(data => {
           document.getElementById("loader").style.display = "none";
           document.getElementById("calculateBtn").disabled = false;
           if (data.shade_route && data.shade_route.length > 0) {
-              drawRoutes(data);
+            drawRoutes(data);
           }
         })
         .catch(err => {
-            console.error("Fetch Error:", err);
-            document.getElementById("loader").style.display = "none";
-            document.getElementById("calculateBtn").disabled = false;
+          console.error("Fetch Error:", err);
+          document.getElementById("loader").style.display = "none";
+          document.getElementById("calculateBtn").disabled = false;
         });
-      }
+    }
 
-      function drawRoutes(data) {
-        if (shadeLine) shadeLine.setMap(null);
-        if (standardLine) standardLine.setMap(null);
+    function drawRoutes(data) {
+      if (shadeLine) shadeLine.setMap(null);
+      if (standardLine) standardLine.setMap(null);
 
-        standardLine = new google.maps.Polyline({
-            path: data.standard_route,
-            strokeColor: "#7F8C8D",
-            strokeOpacity: 0.6,
-            strokeWeight: 4,
-            map: map
-        });
+      standardLine = new google.maps.Polyline({
+        path: data.standard_route,
+        strokeColor: "#7F8C8D",
+        strokeOpacity: 0.6,
+        strokeWeight: 4,
+        map: map
+      });
 
-        shadeLine = new google.maps.Polyline({
-            path: data.shade_route,
-            strokeColor: "#1E8449",
-            strokeOpacity: 1.0,
-            strokeWeight: 7,
-            map: map
-        });
+      shadeLine = new google.maps.Polyline({
+        path: data.shade_route,
+        strokeColor: "#1E8449",
+        strokeOpacity: 1.0,
+        strokeWeight: 7,
+        map: map
+      });
 
-        const bounds = new google.maps.LatLngBounds();
-        data.shade_route.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
-        map.fitBounds(bounds, 50);
+      const bounds = new google.maps.LatLngBounds();
+      data.shade_route.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
+      map.fitBounds(bounds, 50);
 
-        updateStatsPanel(data.stats);
-      }
+      updateStatsPanel(data.stats);
+    }
 
-      function updateStatsPanel(stats) {
-        const panel = document.getElementById("statsPanel");
-        panel.style.display = "block";
-        const saving = stats.shade.shadow - stats.standard.shadow;
-        panel.innerHTML = `
+    function updateStatsPanel(stats) {
+      const panel = document.getElementById("statsPanel");
+      panel.style.display = "block";
+      const saving = stats.shade.shadow - stats.standard.shadow;
+      panel.innerHTML = `
             <h4 style="margin: 0 0 10px 0; color: #1E8449;">Route Comparison</h4>
             <div class="stat-row">
                 <span><b>🌿 Shady Route:</b></span>
@@ -723,47 +370,37 @@
                 ☀️ You gain ${saving > 0 ? saving : 0}% more shade!
             </div>
         `;
+    }
+
+    function resetMap() {
+      markers.forEach(m => m.setMap(null));
+      markers = [];
+
+      if (shadeLine) {
+        shadeLine.setMap(null);
+        shadeLine = null;
+      }
+      if (standardLine) {
+        standardLine.setMap(null);
+        standardLine = null;
       }
 
- /**
- * RESET MAP
- * Fully resets markers, lines, UI, internal states, and reverts time to current real-world hour.
- */
-function resetMap() {
-  // 1. Clear markers from the Google Map and empty the array completely
-  markers.forEach(m => m.setMap(null));
-  markers = [];
-  
-  // 2. Clear the routes (lines) from the map
-  if (shadeLine) { 
-      shadeLine.setMap(null); 
-      shadeLine = null; 
-  }
-  if (standardLine) { 
-      standardLine.setMap(null); 
-      standardLine = null; 
-  }
-  
-  // 3. Reset all UI elements
-  document.getElementById("searchBox").value = "";
-  document.getElementById("confirmPointBtn").style.display = "none";
-  document.getElementById("calculateBtn").style.display = "none";
-  document.getElementById("statsPanel").style.display = "none";
-  document.getElementById("loader").style.display = "none";
-  
-  // 4. Re-sync time to the current real-world hour
-  syncTime();
-  
-  // 5. Reset internal states
-  pendingLocation = null;
-  isNightModeHandled = false; // Reset the night mode flag for the next search session
-  
-  console.log("Map fully reset. Ready for new points.");
-}
-    </script>
+      document.getElementById("searchBox").value = "";
+      document.getElementById("confirmPointBtn").style.display = "none";
+      document.getElementById("calculateBtn").style.display = "none";
+      document.getElementById("statsPanel").style.display = "none";
+      document.getElementById("loader").style.display = "none";
 
-    <script async defer
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANpG9M1g17bl7-YRCxR6g1iEt5_kVDYFE&libraries=places&callback=initMap">
+      syncTime();
+
+      pendingLocation = null;
+      isNightModeHandled = false; 
+    }
+  </script>
+
+  <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANpG9M1g17bl7-YRCxR6g1iEt5_kVDYFE&libraries=places&callback=initMap">
     </script>
-  </body>
+</body>
+
 </html>
