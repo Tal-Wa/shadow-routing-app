@@ -76,6 +76,20 @@ def get_or_build_graph(date_str, hour_val):
         return G
     return nx.Graph()
 
+# --- תדביקי את זה כאן ---
+@app.get("/manifest.json")
+def serve_manifest():
+    return FileResponse("manifest.json")
+
+@app.get("/sw.js")
+def serve_sw():
+    return FileResponse("sw.js")
+# ------------------------
+
+@app.post("/calculate_route")
+def calculate_route(request: RouteRequest):
+    # ... כאן ממשיך הקוד הרגיל שלך ...
+
 @app.post("/calculate_route")
 def calculate_route(request: RouteRequest):
     G = get_or_build_graph(request.date_str, request.hour_val)
