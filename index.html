@@ -19,21 +19,32 @@
       .controls {
         margin-bottom: 15px;
         display: flex;
+        flex-direction: column;
         gap: 10px;
       }
 
       input {
-        flex: 1; padding: 10px;
+        padding: 10px;
         border: 1px solid #ccc; border-radius: 4px;
-        box-sizing: border-box; font-size: 14px;
+        font-size: 14px;
+      }
+
+      .btn {
+        padding: 10px;
+        border: none; border-radius: 4px; cursor: pointer;
+        font-weight: bold; width: 100%;
       }
 
       #confirmPointBtn {
+        background-color: #2196F3; color: white;
         display: none;
-        padding: 10px 15px;
+      }
+
+      /* Style for the main calculation button */
+      #calculateBtn {
         background-color: #1E8449; color: white;
-        border: none; border-radius: 4px; cursor: pointer;
-        font-weight: bold; margin: 0; width: auto;
+        display: none;
+        margin-top: 10px;
       }
 
       .status-pill {
@@ -44,11 +55,9 @@
         font-weight: bold; margin-bottom: 10px;
       }
 
-      button.reset-btn {
-        width: 100%; padding: 10px;
-        cursor: pointer; background-color: #f44336;
-        color: white; border: none; border-radius: 4px;
-        font-weight: bold; margin-top: 10px;
+      .reset-btn {
+        background-color: #f44336; color: white;
+        margin-top: 10px;
       }
 
       #statsPanel {
@@ -77,6 +86,14 @@
           margin-top: 10px;
           font-size: 13px;
       }
+      
+      .loader {
+          display: none;
+          text-align: center;
+          font-size: 12px;
+          color: #666;
+          margin-top: 10px;
+      }
     </style>
   </head>
   <body>
@@ -84,15 +101,15 @@
       <div class="status-pill" id="timeStatus">Detecting time...</div>
 
       <div class="controls">
-        <input id="searchBox" type="text" placeholder="Search for a location...">
-        <button id="confirmPointBtn" onclick="confirmLocation()">Add</button>
+        <input id="searchBox" type="text" placeholder="Search for a location..." onfocus="handleSearchFocus()">
+        <button id="confirmPointBtn" class="btn" onclick="confirmLocation()">Add to Map</button>
       </div>
 
       <p style="font-size: 13px; color: #666; margin-bottom: 5px;">Click map or search for Points A & B</p>
 
       <div id="manualTime" style="font-size: 12px; margin-bottom: 10px;">
           <label>Change Hour:</label>
-          <select id="hourSelect" onchange="recalculateIfPointsExist()">
+          <select id="hourSelect" onchange="handleHourChange()">
             <option value="8">08:00</option>
             <option value="10">10:00</option>
             <option value="14">14:00</option>
@@ -100,7 +117,10 @@
           </select>
       </div>
 
-      <button class="reset-btn" onclick="resetMap()">Reset Map</button>
+      <button id="calculateBtn" class="btn" onclick="triggerRouteCalculation()">Calculate Route 🌿</button>
+      <div id="loader" class="loader">Calculating... please wait</div>
+      
+      <button class="btn reset-btn" onclick="resetMap()">Reset Map</button>
 
       <div id="statsPanel"></div>
     </div>
@@ -123,6 +143,7 @@
           zoomControl: true
         });
 
+        // Initialize Google Places Autocomplete
         const input = document.getElementById("searchBox");
         searchBox = new google.maps.places.Autocomplete(input);
         searchBox.bindTo("bounds", map);
@@ -131,7 +152,6 @@
           const place = searchBox.getPlace();
           if (!place.geometry || !place.geometry.location) return;
 
-          // שומרים את המיקום בצד ומקפיצים את המפה, אבל לא מציירים נקודה
           pendingLocation = place.geometry.location;
           map.setCenter(pendingLocation);
           map.setZoom(17);
@@ -139,6 +159,7 @@
           document.getElementById("confirmPointBtn").style.display = "block";
         });
 
+        // Click listener for manual point selection on map
         map.addListener("click", (e) => {
           addMarker(e.latLng);
         });
@@ -146,10 +167,20 @@
         syncTime();
       }
 
+      /**
+       * CLEARS EXISTING DATA WHEN STARTING A NEW SEARCH
+       * Ensures the user doesn't calculate routes based on old/irrelevant points.
+       */
+      function handleSearchFocus() {
+          if (markers.length >= 2 || shadeLine) {
+              console.log("New search session started. Resetting map...");
+              resetMap();
+          }
+      }
+
       function confirmLocation() {
           if (pendingLocation) {
               addMarker(pendingLocation);
-
               document.getElementById("searchBox").value = "";
               document.getElementById("confirmPointBtn").style.display = "none";
               pendingLocation = null;
@@ -166,37 +197,49 @@
         });
         markers.push(marker);
 
+        // Show the calculation button only when both points are set
         if (markers.length === 2) {
-          fetchRoute(markers[0].getPosition(), markers[1].getPosition());
+            document.getElementById("calculateBtn").style.display = "block";
         }
       }
 
       function syncTime() {
         const now = new Date();
         const currentHour = now.getHours();
-
-        const currentMin = now.getMinutes().toString().padStart(2, '0');
-
         const available = [8, 10, 14, 16];
         let bestMatch = available.reduce((prev, curr) =>
             Math.abs(curr - currentHour) < Math.abs(prev - currentHour) ? curr : prev
         );
-
         document.getElementById("hourSelect").value = bestMatch;
+        document.getElementById("timeStatus").innerText = `Time: ${currentHour}:${now.getMinutes().toString().padStart(2, '0')}`;
+      }
 
-        document.getElementById("timeStatus").innerText = `Time: ${currentHour}:${currentMin}`;
+      /**
+       * TRIGGER CALCULATION
+       * Shows loader and disables button to prevent double-clicks while server works.
+       */
+      function triggerRouteCalculation() {
+          if (markers.length < 2) return;
+          document.getElementById("loader").style.display = "block";
+          document.getElementById("calculateBtn").disabled = true;
+          fetchRoute(markers[0].getPosition(), markers[1].getPosition());
+      }
+
+      // Automatically recalculates if the user changes the time while a route is displayed
+      function handleHourChange() {
+          if (markers.length === 2 && shadeLine) {
+              triggerRouteCalculation();
+          }
       }
 
       function fetchRoute(startPos, endPos) {
         const selectedHour = document.getElementById("hourSelect").value;
-        const selectedDate = '2025-06-21';
-
         const requestBody = {
           start_lat: startPos.lat(),
           start_lng: startPos.lng(),
           end_lat: endPos.lat(),
           end_lng: endPos.lng(),
-          date_str: selectedDate,
+          date_str: '2025-06-21',
           hour_val: parseInt(selectedHour)
         };
 
@@ -207,40 +250,50 @@
         })
         .then(res => res.json())
         .then(data => {
-          if (data.shade_route) {
+          document.getElementById("loader").style.display = "none";
+          document.getElementById("calculateBtn").disabled = false;
+          if (data.shade_route && data.shade_route.length > 0) {
               drawRoutes(data);
           } else {
-              alert("No route found!");
+              alert("No route found between these points.");
           }
         })
-        .catch(err => console.error("Error fetching route:", err));
+        .catch(err => {
+            console.error("Fetch Error:", err);
+            document.getElementById("loader").style.display = "none";
+            document.getElementById("calculateBtn").disabled = false;
+        });
       }
 
       function drawRoutes(data) {
         if (shadeLine) shadeLine.setMap(null);
         if (standardLine) standardLine.setMap(null);
 
-        // 1. ציור המסלול הרגיל (אפור)
-        if (data.standard_route && data.standard_route.length > 0) {
-            standardLine = new google.maps.Polyline({
-                path: data.standard_route,
-                strokeColor: "#7F8C8D",
-                strokeOpacity: 0.6,
-                strokeWeight: 4,
-                map: map
-            });
-        }
+        // Render Standard Path (Grey)
+        standardLine = new google.maps.Polyline({
+            path: data.standard_route,
+            strokeColor: "#7F8C8D",
+            strokeOpacity: 0.6,
+            strokeWeight: 4,
+            map: map
+        });
 
-        // 2. ציור המסלול המוצל (ירוק)
-        if (data.shade_route && data.shade_route.length > 0) {
-            shadeLine = new google.maps.Polyline({
-                path: data.shade_route,
-                strokeColor: "#1E8449",
-                strokeOpacity: 1.0,
-                strokeWeight: 7,
-                map: map
-            });
-        }
+        // Render Shady Path (Green)
+        shadeLine = new google.maps.Polyline({
+            path: data.shade_route,
+            strokeColor: "#1E8449",
+            strokeOpacity: 1.0,
+            strokeWeight: 7,
+            map: map
+        });
+
+        /**
+         * AUTO-ZOOM (Fit Bounds)
+         * Adjusts the map view so the entire route is visible to the user.
+         */
+        const bounds = new google.maps.LatLngBounds();
+        data.shade_route.forEach(point => bounds.extend(new google.maps.LatLng(point.lat, point.lng)));
+        map.fitBounds(bounds, 50); // Added 50px padding
 
         updateStatsPanel(data.stats);
       }
@@ -248,21 +301,17 @@
       function updateStatsPanel(stats) {
         const panel = document.getElementById("statsPanel");
         panel.style.display = "block";
-
         const saving = stats.shade.shadow - stats.standard.shadow;
-
         panel.innerHTML = `
             <h4 style="margin: 0 0 10px 0; color: #1E8449;">Route Comparison</h4>
-
             <div class="stat-row">
                 <span><b>🌿 Shady Route:</b></span>
-                <span>${stats.shade.dist}m | ${stats.shade.shadow}%</span>
+                <span>${stats.shade.dist}m | ${stats.shade.shadow}% shade</span>
             </div>
             <div class="stat-row" style="color: #666;">
                 <span><b>🚶 Standard Route:</b></span>
-                <span>${stats.standard.dist}m | ${stats.standard.shadow}%</span>
+                <span>${stats.standard.dist}m | ${stats.standard.shadow}% shade</span>
             </div>
-
             <div class="stat-saving">
                 ☀️ You gain ${saving > 0 ? saving : 0}% more shade!
             </div>
@@ -274,23 +323,17 @@
         markers = [];
         if (shadeLine) shadeLine.setMap(null);
         if (standardLine) standardLine.setMap(null);
-
-        // איפוס גם למצב החיפוש
         document.getElementById("searchBox").value = "";
         document.getElementById("confirmPointBtn").style.display = "none";
-        pendingLocation = null;
+        document.getElementById("calculateBtn").style.display = "none";
         document.getElementById("statsPanel").style.display = "none";
+        document.getElementById("loader").style.display = "none";
+        pendingLocation = null;
       }
-
-      function recalculateIfPointsExist() {
-        if (markers.length === 2) fetchRoute(markers[0].getPosition(), markers[1].getPosition());
-      }
-
     </script>
 
     <script async defer
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANpG9M1g17bl7-YRCxR6g1iEt5_kVDYFE&libraries=places&callback=initMap">
+      src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&libraries=places&callback=initMap">
     </script>
   </body>
 </html>
-
