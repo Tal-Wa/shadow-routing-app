@@ -1,4 +1,4 @@
-<!-- <!DOCTYPE html>
+<!-- <!-- <!DOCTYPE html>
 <html lang="he">
 
 <head>
@@ -408,6 +408,332 @@
 
 </html> -->
 
+<!-- <!DOCTYPE html>
+<html lang="he">
+
+<head>
+  <meta charset="UTF-8">
+  <title>ShadowApp - Smart Routing</title>
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 20px;
+      z-index: 5;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      width: 300px;
+    }
+
+    .controls {
+      margin-bottom: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    input {
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .btn {
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+    }
+
+    #confirmPointBtn {
+      background-color: #2196F3;
+      color: white;
+      display: none;
+    }
+
+    #calculateBtn {
+      background-color: #1E8449;
+      color: white;
+      display: none;
+      margin-top: 10px;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 4px 10px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .reset-btn {
+      background-color: #f44336;
+      color: white;
+      margin-top: 10px;
+    }
+
+    #statsPanel {
+      display: none;
+      margin-top: 15px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #1E8449;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .stat-saving {
+      background: #e8f5e9;
+      padding: 8px;
+      border-radius: 5px;
+      text-align: center;
+      font-weight: bold;
+      color: #2e7d32;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .loader {
+      display: none;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+    }
+
+    #actionArea {
+      margin-top: 15px;
+      border-top: 1px solid #eee;
+      padding-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="info">
+    <div class="status-pill" id="timeStatus">Detecting time...</div>
+
+    <div class="controls">
+      <input id="searchBox" type="text" placeholder="Search for a location..." onfocus="handleSearchFocus()">
+      <button id="confirmPointBtn" class="btn" onclick="confirmLocation()">Add to Map</button>
+    </div>
+
+    <p style="font-size: 13px; color: #666; margin-bottom: 5px;">Click map or search for Points A & B</p>
+
+    <div id="actionArea">
+      <button id="calculateBtn" class="btn" onclick="triggerRouteCalculation()">Calculate Route 🌿</button>
+
+      <div id="loader" class="loader">Calculating optimal shade...</div>
+
+      <div id="manualTime" style="font-size: 13px; margin-top: 15px; margin-bottom: 10px;">
+        <label><b>Route Time:</b></label>
+        <select id="hourSelect" onchange="handleHourChange()">
+          <option value="8">08:00</option>
+          <option value="8.5">08:30</option>
+          <option value="9">09:00</option>
+          <option value="9.5">09:30</option>
+          <option value="10">10:00</option>
+          <option value="10.5">10:30</option>
+          <option value="11">11:00</option>
+          <option value="11.5">11:30</option>
+          <option value="12">12:00</option>
+          <option value="12.5">12:30</option>
+          <option value="13">13:00</option>
+          <option value="13.5">13:30</option>
+          <option value="14">14:00</option>
+          <option value="14.5">14:30</option>
+          <option value="15">15:00</option>
+          <option value="15.5">15:30</option>
+          <option value="16">16:00</option>
+          <option value="16.5">16:30</option>
+          <option value="17">17:00</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn reset-btn" onclick="resetMap()">Reset Map</button>
+
+    <button id="installAppBtn" class="btn" style="background-color: #FF9800; color: white; display: none; margin-bottom: 10px;" onclick="installPWA()">התקן אפליקציה 📱</button>
+
+    <div id="statsPanel"></div>
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+    let map;
+    let markers = [];
+    let shadeLine = null;
+    let standardLine = null;
+    let searchBox;
+    let pendingLocation = null;
+    let isNightModeHandled = false;
+
+    function initMap() {
+      map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 15,
+        center: { lat: 31.8928, lng: 34.8113 },
+        disableDefaultUI: false,
+        zoomControl: true
+      });
+
+      const input = document.getElementById("searchBox");
+      searchBox = new google.maps.places.Autocomplete(input);
+      searchBox.bindTo("bounds", map);
+
+      searchBox.addListener("place_changed", () => {
+        const place = searchBox.getPlace();
+        if (!place.geometry || !place.geometry.location) return;
+
+        pendingLocation = place.geometry.location;
+        map.setCenter(pendingLocation);
+        map.setZoom(17);
+        document.getElementById("confirmPointBtn").style.display = "block";
+      });
+
+      map.addListener("click", (e) => {
+        addMarker(e.latLng);
+      });
+
+      syncTime();
+    }
+
+    function handleSearchFocus() {
+      if (markers.length >= 2 || shadeLine) {
+        resetMap();
+      }
+    }
+
+    function confirmLocation() {
+      if (pendingLocation) {
+        addMarker(pendingLocation);
+        document.getElementById("searchBox").value = "";
+        document.getElementById("confirmPointBtn").style.display = "none";
+        pendingLocation = null;
+      }
+    }
+
+    function addMarker(location) {
+      if (markers.length >= 2) return;
+
+      const marker = new google.maps.Marker({
+        position: location,
+        map: map,
+        label: markers.length === 0 ? "A" : "B"
+      });
+      markers.push(marker);
+
+      if (markers.length === 2) {
+        document.getElementById("calculateBtn").style.display = "block";
+      }
+    }
+
+    function syncTime() {
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMin = now.getMinutes();
+
+      // Convert current time to a decimal number (e.g., 14:45 becomes 14.75)
+      let timeDecimal = currentHour + (currentMin / 60);
+
+      // Round to the nearest half-hour (e.g., 14.75 becomes 15.0)
+      let roundedTime = Math.round(timeDecimal * 2) / 2;
+
+      // Constrain the rounded time to stay within the dropdown's active hours (8 to 17)
+      if (roundedTime < 8) roundedTime = 8;
+      if (roundedTime > 17) roundedTime = 17;
+
+      document.getElementById("hourSelect").value = roundedTime.toString();
+      document.getElementById("timeStatus").innerText = `Current Time: ${currentHour}:${currentMin.toString().padStart(2, '0')}`;
+    }
+
+    function triggerRouteCalculation() {
+      if (markers.length < 2) return;
+
+      const currentHour = new Date().getHours();
+
+      if ((currentHour >= 17 || currentHour < 6) && !isNightModeHandled) {
+        alert("השמש שקעה 🌙 צאו ליהנות מהאוויר");
+        document.getElementById("hourSelect").value = "8"; 
+        isNightModeHandled = true; 
+        return; 
+      }
+
+      document.getElementById("loader").style.display = "block";
+      document.getElementById("calculateBtn").disabled = true;
+      fetchRoute(markers[0].getPosition(), markers[1].getPosition());
+    }
+
+    function handleHourChange() {
+      isNightModeHandled = true; 
+      if (markers.length === 2 && (shadeLine || standardLine)) {
+        triggerRouteCalculation();
+      }
+    }
+
+    function fetchRoute(startPos, endPos) {
+      // 1. Get the time selected by the user from the dropdown
+      const selectedValue = parseFloat(document.getElementById("hourSelect").value);
+
+      // 2. Define the exact hours we have pre-calculated
+      const availableHours = [8, 10, 14, 16];
+
+      // 3. Mathematical "Snapping"
+      const closestHour = availableHours.reduce((prev, curr) =>
+          Math.abs(curr - selectedValue) < Math.abs(prev - selectedValue) ? curr : prev
+      );
+
+      const requestBody = {
+        start_lat: startPos.lat(),
+        start_lng: startPos.lng(),
+        end_lat: endPos.lat(),
+        end_lng: endPos.lng(),
+        date_str: '2025-06-21',
+        hour_val: closestHour
+      };
+
+      fetch("/calculate_route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody)
+      })
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("loader").style.display = "none";
+          document.getElementById("calculateBtn").disabled = false;
+          if (data.shade_route && data.shade_route.length > 0) {
+            drawRoutes(data);
+          }
+        })
+        .catch(err => {
+          console.error("Fetch Error:", err);
+          document --> -->
 <!DOCTYPE html>
 <html lang="he">
 
@@ -733,4 +1059,126 @@
         })
         .catch(err => {
           console.error("Fetch Error:", err);
-          document
+          document.getElementById("loader").style.display = "none";
+          document.getElementById("calculateBtn").disabled = false;
+        });
+    }
+
+    function drawRoutes(data) {
+      if (shadeLine) shadeLine.setMap(null);
+      if (standardLine) standardLine.setMap(null);
+
+      standardLine = new google.maps.Polyline({
+        path: data.standard_route,
+        strokeColor: "#7F8C8D",
+        strokeOpacity: 0.6,
+        strokeWeight: 4,
+        map: map
+      });
+
+      shadeLine = new google.maps.Polyline({
+        path: data.shade_route,
+        strokeColor: "#1E8449",
+        strokeOpacity: 1.0,
+        strokeWeight: 7,
+        map: map
+      });
+
+      const bounds = new google.maps.LatLngBounds();
+      data.shade_route.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
+      map.fitBounds(bounds, 50);
+
+      updateStatsPanel(data.stats);
+    }
+
+    function updateStatsPanel(stats) {
+      const panel = document.getElementById("statsPanel");
+      panel.style.display = "block";
+      const saving = stats.shade.shadow - stats.standard.shadow;
+      panel.innerHTML = `
+            <h4 style="margin: 0 0 10px 0; color: #1E8449;">Route Comparison</h4>
+            <div class="stat-row">
+                <span><b>🌿 Shady Route:</b></span>
+                <span>${stats.shade.dist}m | ${stats.shade.shadow}% shade</span>
+            </div>
+            <div class="stat-row" style="color: #666;">
+                <span><b>🚶 Standard Route:</b></span>
+                <span>${stats.standard.dist}m | ${stats.standard.shadow}% shade</span>
+            </div>
+            <div class="stat-saving">
+                ☀️ You gain ${saving > 0 ? saving : 0}% more shade!
+            </div>
+        `;
+    }
+
+    function resetMap() {
+      markers.forEach(m => m.setMap(null));
+      markers = [];
+
+      if (shadeLine) {
+        shadeLine.setMap(null);
+        shadeLine = null;
+      }
+      if (standardLine) {
+        standardLine.setMap(null);
+        standardLine = null;
+      }
+
+      document.getElementById("searchBox").value = "";
+      document.getElementById("confirmPointBtn").style.display = "none";
+      document.getElementById("calculateBtn").style.display = "none";
+      document.getElementById("statsPanel").style.display = "none";
+      document.getElementById("loader").style.display = "none";
+
+      syncTime();
+
+      pendingLocation = null;
+      isNightModeHandled = false; 
+    }
+
+    // --- PWA Installation Logic ---
+    let deferredPrompt;
+
+    // 1. Register the Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(reg => {
+          console.log('Service Worker registered!', reg);
+        }).catch(err => console.log('Service Worker error', err));
+      });
+    }
+
+    // 2. Listen for the install prompt from the browser
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent Chrome from showing the native prompt automatically
+      e.preventDefault();
+      // Save the event so it can be triggered later
+      deferredPrompt = e;
+      // Show our custom install button
+      document.getElementById('installAppBtn').style.display = 'block';
+    });
+
+    // 3. Function to trigger when the user clicks our button
+    function installPWA() {
+      if (deferredPrompt) {
+        // Show the browser's install prompt
+        deferredPrompt.prompt();
+        // Wait for the user to respond to the prompt
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('User accepted the install prompt');
+          }
+          deferredPrompt = null;
+          // Hide the button after interaction
+          document.getElementById('installAppBtn').style.display = 'none';
+        });
+      }
+    }
+  </script>
+
+  <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyANpG9M1g17bl7-YRCxR6g1iEt5_kVDYFE&libraries=places&callback=initMap">
+    </script>
+</body>
+
+</html>
