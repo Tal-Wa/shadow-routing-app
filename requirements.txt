@@ -1,7 +1,5 @@
 fastapi
 uvicorn
-pandas
+pydantic
 networkx
-geopandas
 shapely
-sqlalchemy
