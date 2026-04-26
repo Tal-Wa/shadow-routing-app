@@ -243,9 +243,9 @@ def serve_manifest():
 def serve_sw():
     return FileResponse("sw.js")
 
-@app.get("/app-icon.svg")
+@app.get("/Tree-3--Streamline-Sharp.png")
 def serve_icon():
-    return FileResponse("app-icon.svg")
+    return FileResponse("Tree-3--Streamline-Sharp.png")
 
 @app.post("/calculate_route")
 def calculate_route(request: RouteRequest):
