@@ -1,17 +1,16 @@
-const CACHE_NAME = 'shadowapp-v1';
-const URLS_TO_CACHE = ['/', '/manifest.json', '/Tree-3--Streamline-Sharp.png'];
+const CACHE_NAME = 'shadowapp-v2'; // שינינו את שם הגרסה כדי להרוס את הקודמת!
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(URLS_TO_CACHE)));
-  self.skipWaiting();
+  self.skipWaiting(); // כופה על ה-SW החדש להשתלט מיד
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(clients.claim());
+  e.waitUntil(clients.claim()); // מוחק גרסאות ישנות מהזיכרון
 });
 
 self.addEventListener('fetch', e => {
+  // קודם כל מנסה להביא מהשרת את הקובץ המעודכן ביותר, ורק אם אין אינטרנט - לוקח מהזיכרון
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
+    fetch(e.request).catch(() => caches.match(e.request))
   );
 });
