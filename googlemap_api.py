@@ -237,13 +237,27 @@ def serve_home_page():
 
 @app.get("/manifest.json")
 def serve_manifest():
-    # מוצא את התיקייה המדויקת שבה נמצא קובץ הפייתון הזה
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    # מחבר אליה את שם הקובץ
-    manifest_path = os.path.join(base_dir, "manifest.json")
-    
-    return FileResponse(manifest_path, media_type="application/manifest+json")
-
+    return {
+      "short_name": "ShadowApp",
+      "name": "ShadowApp - Smart Routing",
+      "icons": [
+        {
+          "src": "/Tree-3--Streamline-Sharp.png",
+          "type": "image/png",
+          "sizes": "192x192"
+        },
+        {
+          "src": "/Tree-3--Streamline-Sharp.png",
+          "type": "image/png",
+          "sizes": "512x512"
+        }
+      ],
+      "start_url": "/",
+      "background_color": "#ffffff",
+      "display": "standalone",
+      "scope": "/",
+      "theme_color": "#1E8449"
+    }
 @app.get("/sw.js")
 def serve_sw():
     return FileResponse("sw.js")
