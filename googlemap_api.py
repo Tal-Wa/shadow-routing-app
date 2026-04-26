@@ -243,6 +243,10 @@ def serve_manifest():
 def serve_sw():
     return FileResponse("sw.js")
 
+@app.get("/app-icon.svg")
+def serve_icon():
+    return FileResponse("app-icon.svg")
+
 @app.post("/calculate_route")
 def calculate_route(request: RouteRequest):
     G = get_or_build_graph(request.date_str, request.hour_val)
