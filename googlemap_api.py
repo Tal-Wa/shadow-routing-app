@@ -237,7 +237,12 @@ def serve_home_page():
 
 @app.get("/manifest.json")
 def serve_manifest():
-    return FileResponse("manifest.json", media_type="application/manifest+json")
+    # מוצא את התיקייה המדויקת שבה נמצא קובץ הפייתון הזה
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # מחבר אליה את שם הקובץ
+    manifest_path = os.path.join(base_dir, "manifest.json")
+    
+    return FileResponse(manifest_path, media_type="application/manifest+json")
 
 @app.get("/sw.js")
 def serve_sw():
