@@ -237,7 +237,7 @@ def serve_home_page():
 
 @app.get("/manifest.json")
 def serve_manifest():
-    return FileResponse("manifest.json")
+    return FileResponse("manifest.json", media_type="application/manifest+json")
 
 @app.get("/sw.js")
 def serve_sw():
